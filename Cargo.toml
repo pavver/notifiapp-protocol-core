@@ -18,6 +18,7 @@ dashmap = "6"
 tracing = "0.1"
 url = "2"
 parking_lot = "0.12"
+notifiapp-protocol-macros = { path = "../notifiapp-protocol-macros" }
 
 [features]
 default = ["webrtc"]

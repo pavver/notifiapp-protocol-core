@@ -50,6 +50,7 @@ Every sentence in this document is on a separate line.
 
 - The project integrates macro-based incremental updates.
 - Objects derive `Diffable` to automatically calculate field-level changes.
-- Uses `#[diff(immutable)]` for fields like IDs that cannot be changed.
-- Uses `#[diff(nested)]` for recursive diff calculation of inner objects.
+- Uses `#[diff(required)]` for fields like IDs that must always be sent in updates.
+- Uses `#[diff(immutable)]` for fields like creation time that never change.
+- Inlined nested Diffable structures are automatically resolved at compile time without extra attributes.
 - Non-annotated fields fall back to full value replacement if changed.

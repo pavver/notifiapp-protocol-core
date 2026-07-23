@@ -17,6 +17,17 @@ pub enum ParsedAuthResponse {
     InvalidResponse,
 }
 
+/// Events emitted by the session authentication handler when connection is established.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthSessionEvent {
+    /// Session was successfully resumed using a token (existing server subscriptions are kept).
+    SessionResumed,
+    /// A new session was created using login/credentials (existing server subscriptions are reset).
+    NewSessionCreated,
+    /// Session restoration failed (token was invalid/expired).
+    SessionRestoreFailed,
+}
+
 /// Generic session-based authentication handler.
 ///
 /// Implements `AuthHandler` from `notifiapp-transport` and automates:
@@ -35,6 +46,8 @@ pub struct SessionAuthHandler<Action, Response, Codec> {
     resume_builder: Arc<dyn Fn(String) -> Action + Send + Sync>,
     /// Parser to extract auth outcome from the deserialized response message.
     response_parser: Arc<dyn Fn(Response) -> ParsedAuthResponse + Send + Sync>,
+    /// Publisher for session events.
+    event_tx: tokio::sync::broadcast::Sender<AuthSessionEvent>,
     /// Phantom data to satisfy the compiler for the codec type.
     _phantom: std::marker::PhantomData<Codec>,
 }
@@ -51,14 +64,21 @@ where
         resume_builder: impl Fn(String) -> Action + Send + Sync + 'static,
         response_parser: impl Fn(Response) -> ParsedAuthResponse + Send + Sync + 'static,
     ) -> Self {
+        let (event_tx, _) = tokio::sync::broadcast::channel(16);
         Self {
             credentials: Arc::new(RwLock::new(None)),
             token: Arc::new(RwLock::new(None)),
             login_builder: Arc::new(login_builder),
             resume_builder: Arc::new(resume_builder),
             response_parser: Arc::new(response_parser),
+            event_tx,
             _phantom: std::marker::PhantomData,
         }
+    }
+
+    /// Subscribe to session auth events.
+    pub fn subscribe_session_events(&self) -> tokio::sync::broadcast::Receiver<AuthSessionEvent> {
+        self.event_tx.subscribe()
     }
 
     /// Update user credentials (typically triggered by a login call).
@@ -120,15 +140,25 @@ where
             Err(_) => return AuthOutcome::Failed,
         };
 
+        // Determine if we attempted resume or login by checking if token was set
+        let attempted_resume = self.get_token().await.is_some();
+
         match (self.response_parser)(resp) {
             ParsedAuthResponse::Success { token } => {
                 self.set_token(token).await;
+                if attempted_resume {
+                    let _ = self.event_tx.send(AuthSessionEvent::SessionResumed);
+                } else {
+                    let _ = self.event_tx.send(AuthSessionEvent::NewSessionCreated);
+                }
                 AuthOutcome::Success
             }
             ParsedAuthResponse::SessionExpired => {
                 // Clear the expired resume token
                 let mut tok = self.token.write().await;
                 *tok = None;
+
+                let _ = self.event_tx.send(AuthSessionEvent::SessionRestoreFailed);
 
                 // Check if we can fallback to credentials immediately
                 if self.credentials.read().await.is_some() {
@@ -142,14 +172,23 @@ where
                 // Server explicitly rejected credentials
                 *self.credentials.write().await = None;
                 *self.token.write().await = None;
+                if attempted_resume {
+                    let _ = self.event_tx.send(AuthSessionEvent::SessionRestoreFailed);
+                }
                 AuthOutcome::Unauthorized
             }
-            ParsedAuthResponse::InvalidResponse => AuthOutcome::Failed,
+            ParsedAuthResponse::InvalidResponse => {
+                if attempted_resume {
+                    let _ = self.event_tx.send(AuthSessionEvent::SessionRestoreFailed);
+                }
+                AuthOutcome::Failed
+            }
         }
     }
 
     async fn on_session_expired(&self) {
         // Session expired notification from server during normal operation
         *self.token.write().await = None;
+        let _ = self.event_tx.send(AuthSessionEvent::SessionRestoreFailed);
     }
 }

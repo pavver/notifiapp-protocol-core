@@ -86,6 +86,13 @@ where
         &self.transport
     }
 
+    /// Subscribe to connection state changes.
+    pub fn subscribe_state(
+        &self,
+    ) -> tokio::sync::watch::Receiver<notifiapp_transport::ConnectionState> {
+        self.transport.subscribe_state()
+    }
+
     /// Send an action request with a custom priority and await the response.
     pub async fn call_with_priority(
         &self,

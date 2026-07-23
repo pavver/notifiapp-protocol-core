@@ -200,6 +200,7 @@ fn test_conflated_queue_merging() {
     assert_eq!(final_patch.field_b, Some("value_b".to_string()));
 }
 
+#[cfg(feature = "webrtc")]
 #[test]
 fn test_webrtc_serialization() {
     use notifiapp_protocol_core::webrtc::{

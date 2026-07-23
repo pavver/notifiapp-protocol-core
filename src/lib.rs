@@ -10,6 +10,7 @@ pub mod conflated_queue;
 pub mod envelope;
 pub mod server;
 pub mod subscriptions;
+#[cfg(feature = "webrtc")]
 pub mod webrtc;
 
 // Re-exports for convenience
@@ -21,4 +22,5 @@ pub use conflated_queue::{Conflatabled, ConflatedQueue, ConflationKey};
 pub use envelope::{EventEnvelope, RequestEnvelope, ResponseEnvelope};
 pub use server::{ProtocolHandler, ProtocolServer};
 pub use subscriptions::{DiffResult, ReactiveTracker, SubscriptionRegistry};
+#[cfg(feature = "webrtc")]
 pub use webrtc::{ParticipantState, RoomState, SignalPayload, TrackInfo, TrackType, WebRtcSignal};

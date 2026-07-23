@@ -17,3 +17,8 @@ futures-util = "0.3"
 dashmap = "6"
 tracing = "0.1"
 
+[features]
+default = ["webrtc"]
+# Enable WebRTC signaling and room models
+webrtc = []
+

@@ -78,3 +78,30 @@ if let Some(patch) = dev_old.diff(&dev_new) {
     println!("Changes detected: {:?}", patch);
 }
 ```
+
+### Direct Queries (Request-Response without Subscriptions)
+
+```rust
+// ProtocolClient supports direct request-response communication (e.g. for fetching history or one-off tasks)
+// This does not require active subscriptions and returns the deserialized response directly.
+let response: GetMessagesResponse = client.get_messages(GetMessagesQuery {
+    room_id,
+    cursor: None,
+    limit: 50,
+}).await.unwrap();
+```
+
+### Managing Subscriptions (High-Level Watch/Unwatch Flow)
+
+```rust
+// 1. Subscribe to events using a high-level watch helper.
+// The helper sends the watch Action to the server, registers the callback locally,
+// and returns a subscription token (Uuid) and initial data.
+let (sub_id, initial_data) = client.watch_users(query, move |event: ServerEvent| {
+    println!("Received user update: {:?}", event);
+}).await.unwrap();
+
+// 2. Unsubscribe by passing the subscription token back to the client.
+// The helper automatically removes the local callback and informs the server.
+client.unwatch(sub_id).await.unwrap();
+```

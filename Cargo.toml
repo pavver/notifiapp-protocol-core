@@ -6,19 +6,20 @@ description = "Core protocol abstractions for notifiapp: generic envelopes, clie
 
 [dependencies]
 notifiapp-transport = { path = "../notifiapp-transport" }
-serde = { version = "1", features = ["derive"] }
-postcard = { version = "1", features = ["use-std"] }
-serde_json = "1"
-uuid = { version = "1", features = ["v4", "serde"] }
-tokio = { version = "1", features = ["sync", "rt", "time"] }
-thiserror = "2"
-async-trait = "0.1"
-futures-util = "0.3"
-dashmap = "6"
-tracing = "0.1"
-url = "2"
-parking_lot = "0.12"
-notifiapp-protocol-macros = { path = "../notifiapp-protocol-macros" }
+serde = { version = "1.0.229", features = ["derive"] }
+postcard = { version = "1.1.3", features = ["use-std"] }
+serde_json = "1.0.151"
+uuid = { version = "1.24.0", features = ["v4", "serde"] }
+tokio = { version = "1.53.1", features = ["sync", "rt", "time"] }
+tokio-util = { version = "0.7.19" }
+thiserror = "2.0.19"
+async-trait = "0.1.91"
+futures-util = "0.3.33"
+dashmap = "6.2.1"
+tracing = "0.1.44"
+url = "2.5.8"
+parking_lot = "0.12.5"
+notifiapp-protocol-macros = { path = "macros" }
 
 [features]
 default = ["webrtc"]

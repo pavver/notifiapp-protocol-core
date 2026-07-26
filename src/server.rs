@@ -29,24 +29,60 @@ where
     /// Spawns concurrent tokio tasks for each request to avoid blocking the main session loop.
     pub async fn run_session(
         state: State,
-        mut inbox: tokio::sync::mpsc::Receiver<Frame>,
+        mut inbox: tokio::sync::mpsc::UnboundedReceiver<Frame>,
         handle: ServerSessionHandle,
         handler: Arc<dyn ProtocolHandler<State, Action, Response, Error>>,
+        cancel: tokio_util::sync::CancellationToken,
     ) {
-        while let Some(frame) = inbox.recv().await {
-            // We only handle message requests. Pings, Pongs and Events are managed by the transport layer.
-            if frame.kind == FrameKind::Message {
-                let state_clone = state.clone();
-                let handle_clone = handle.clone();
-                let handler_clone = Arc::clone(&handler);
+        use tokio::sync::Semaphore;
+        use tokio::task::JoinSet;
 
-                tokio::spawn(async move {
-                    if let Err(e) =
-                        Self::process_frame(state_clone, frame, handle_clone, handler_clone).await
-                    {
-                        tracing::error!("Failed to process session frame: {:?}", e);
+        let mut tasks = JoinSet::new();
+        let semaphore = Arc::new(Semaphore::new(64));
+
+        loop {
+            tokio::select! {
+                _ = cancel.cancelled() => {
+                    break;
+                }
+                Some(frame) = inbox.recv() => {
+                    if frame.kind == FrameKind::Message {
+                        let state_clone = state.clone();
+                        let handle_clone = handle.clone();
+                        let handler_clone = Arc::clone(&handler);
+
+                        let permit = match semaphore.clone().acquire_owned().await {
+                            Ok(permit) => permit,
+                            Err(_) => {
+                                tracing::error!("Semaphore closed unexpectedly");
+                                break;
+                            }
+                        };
+
+                        tasks.spawn(async move {
+                            if let Err(e) =
+                                Self::process_frame(state_clone, frame, handle_clone, handler_clone).await
+                            {
+                                tracing::error!("Failed to process session frame: {:?}", e);
+                            }
+                            drop(permit);
+                        });
                     }
-                });
+                }
+                Some(res) = tasks.join_next() => {
+                    if let Err(e) = res {
+                        tracing::error!("Task join error: {:?}", e);
+                    }
+                }
+                else => {
+                    break;
+                }
+            }
+        }
+
+        while let Some(res) = tasks.join_next().await {
+            if let Err(e) = res {
+                tracing::error!("Task join error during shutdown: {:?}", e);
             }
         }
     }

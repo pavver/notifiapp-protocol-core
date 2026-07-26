@@ -1,7 +1,7 @@
 use crate::codec::{CodecError, ProtocolCodec};
 use crate::envelope::{EventEnvelope, RequestEnvelope, ResponseEnvelope};
 use crate::subscriptions::SubscriptionRegistry;
-use notifiapp_transport::{MessagePriority, TransportError, WsClient};
+use notifiapp_transport::{MessagePriority, Transport, TransportError};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use thiserror::Error;
@@ -36,7 +36,7 @@ pub trait Prioritized {
 /// - Decoding response bytes into `ResponseEnvelope` and extracting outcomes.
 /// - Listening for server-push events, decoding them, and dispatching to `SubscriptionRegistry`.
 pub struct ProtocolClient<Action, Response, Error, Event, Codec> {
-    transport: Arc<WsClient>,
+    transport: Arc<dyn Transport>,
     subscriptions: Arc<SubscriptionRegistry<Event>>,
     next_request_id: AtomicU32,
     _phantom: std::marker::PhantomData<(Action, Response, Error, Codec)>,
@@ -54,11 +54,11 @@ where
     ///
     /// This will automatically register an event handler on the transport to
     /// decode and dispatch server push events.
-    pub fn new(transport: Arc<WsClient>) -> Arc<Self> {
+    pub fn new(transport: Arc<dyn Transport>) -> Arc<Self> {
         let subscriptions = Arc::new(SubscriptionRegistry::new());
         let subs_clone = Arc::clone(&subscriptions);
 
-        transport.on_event(move |bytes| {
+        transport.on_event(Arc::new(move |bytes| {
             if let Ok(EventEnvelope {
                 subscription_id: Some(sub_id),
                 event,
@@ -66,7 +66,7 @@ where
             {
                 subs_clone.dispatch(&sub_id, event);
             }
-        });
+        }));
 
         Arc::new(Self {
             transport,
@@ -82,7 +82,7 @@ where
     }
 
     /// Access the underlying transport client.
-    pub fn transport(&self) -> &WsClient {
+    pub fn transport(&self) -> &Arc<dyn Transport> {
         &self.transport
     }
 

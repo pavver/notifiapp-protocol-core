@@ -1,0 +1,13 @@
+[package]
+name = "notifiapp-protocol-macros"
+version = "0.1.0"
+edition = "2024"
+description = "Procedural macro implementations for notifiapp-protocol-core (e.g. derive(Diffable))"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "3.0.3", features = ["full", "extra-traits", "parsing"] }
+quote = "1.0.47"
+proc-macro2 = "1.0.107"

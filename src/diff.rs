@@ -115,3 +115,106 @@ where
         Some(val.clone())
     }
 }
+
+/// A patch representing changes in a Vec collection.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub enum VecPatch<T, Patch> {
+    /// No changes detected.
+    NoChange,
+    /// Full reset: replace entire list.
+    Full(Vec<T>),
+    /// Incremental updates: a sequence of insert, remove, or update operations.
+    Incremental(Vec<VecOp<T, Patch>>),
+}
+
+/// An operation applied to an element inside a Vec collection.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub enum VecOp<T, Patch> {
+    /// Insert a new item at index.
+    Insert { index: usize, value: T },
+    /// Remove an item at index.
+    Remove { index: usize },
+    /// Update an item at index with a patch (diff).
+    Update { index: usize, patch: Patch },
+}
+
+impl<T> GetPatchType for Vec<T>
+where
+    T: GetPatchType
+        + PartialEq
+        + Clone
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + std::fmt::Debug,
+{
+    type FieldPatch = VecPatch<T, T::FieldPatch>;
+
+    #[allow(clippy::needless_range_loop)]
+    fn resolve_diff(old: &Self, new: &Self) -> Self::FieldPatch {
+        if old == new {
+            return VecPatch::NoChange;
+        }
+
+        let mut ops = Vec::new();
+        let common_len = std::cmp::min(old.len(), new.len());
+
+        for i in 0..common_len {
+            if old[i] != new[i] {
+                let patch = T::resolve_diff(&old[i], &new[i]);
+                ops.push(VecOp::Update { index: i, patch });
+            }
+        }
+
+        if new.len() > old.len() {
+            for i in common_len..new.len() {
+                ops.push(VecOp::Insert {
+                    index: i,
+                    value: new[i].clone(),
+                });
+            }
+        } else if old.len() > new.len() {
+            // Remove starting from the end to avoid shifting indices during execution
+            for i in (common_len..old.len()).rev() {
+                ops.push(VecOp::Remove { index: i });
+            }
+        }
+
+        VecPatch::Incremental(ops)
+    }
+
+    fn resolve_apply(target: &mut Self, patch: &Self::FieldPatch) {
+        match patch {
+            VecPatch::NoChange => {}
+            VecPatch::Full(full) => {
+                *target = full.clone();
+            }
+            VecPatch::Incremental(ops) => {
+                for op in ops {
+                    match op {
+                        VecOp::Insert { index, value } => {
+                            if *index <= target.len() {
+                                target.insert(*index, value.clone());
+                            } else {
+                                target.push(value.clone());
+                            }
+                        }
+                        VecOp::Remove { index } => {
+                            if *index < target.len() {
+                                target.remove(*index);
+                            }
+                        }
+                        VecOp::Update { index, patch } => {
+                            if *index < target.len() {
+                                T::resolve_apply(&mut target[*index], patch);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn resolve_full(val: &Self) -> Self::FieldPatch {
+        VecPatch::Full(val.clone())
+    }
+}

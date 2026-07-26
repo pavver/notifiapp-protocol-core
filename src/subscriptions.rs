@@ -79,20 +79,24 @@ where
     where
         F: Fn(&Item) -> Id,
     {
+        use std::collections::HashSet;
+
         let new_ids: Vec<Id> = current_items.iter().map(&get_id).collect();
+        let new_ids_set: HashSet<Id> = new_ids.iter().cloned().collect();
+        let cached_ids_set: HashSet<Id> = self.cached_ids.iter().cloned().collect();
 
         // Calculate removed items: present in cached_ids, absent in new_ids
         let removed: Vec<Id> = self
             .cached_ids
             .iter()
-            .filter(|id| !new_ids.contains(id))
+            .filter(|id| !new_ids_set.contains(id))
             .cloned()
             .collect();
 
         // Calculate added items: present in current_items, absent in cached_ids
         let added: Vec<Item> = current_items
             .into_iter()
-            .filter(|item| !self.cached_ids.contains(&get_id(item)))
+            .filter(|item| !cached_ids_set.contains(&get_id(item)))
             .collect();
 
         self.cached_ids = new_ids;

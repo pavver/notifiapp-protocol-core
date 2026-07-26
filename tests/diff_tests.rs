@@ -1,14 +1,14 @@
 use notifiapp_protocol_core::Diffable;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Diffable, PartialEq)]
+#[derive(Debug, Clone, Diffable, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SubConfig {
     #[diff(required)]
     pub sub_id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Diffable, PartialEq)]
+#[derive(Debug, Clone, Diffable, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UserProfile {
     #[diff(required)]
     pub id: Uuid,
@@ -136,4 +136,161 @@ fn test_nested_incremental_diff() {
     // Apply patch
     old_profile.apply_patch(&patch);
     assert_eq!(old_profile.config.name, "Custom Settings");
+}
+
+use notifiapp_protocol_core::diff::{VecOp, VecPatch};
+
+#[test]
+fn test_vec_scalar_diff() {
+    use notifiapp_protocol_core::diff::GetPatchType;
+
+    let old_vec = vec![1u32, 2, 3];
+    let new_vec = vec![1u32, 4, 3, 5]; // 2 -> 4, add 5 at the end
+
+    let patch = <Vec<u32> as GetPatchType>::resolve_diff(&old_vec, &new_vec);
+
+    assert_eq!(
+        patch,
+        VecPatch::Incremental(vec![
+            VecOp::Update {
+                index: 1,
+                patch: Some(4)
+            },
+            VecOp::Insert { index: 3, value: 5 },
+        ])
+    );
+
+    let mut target = old_vec;
+    <Vec<u32> as GetPatchType>::resolve_apply(&mut target, &patch);
+    assert_eq!(target, vec![1, 4, 3, 5]);
+
+    // Test deletion from end
+    let shorter_vec = vec![1u32, 4];
+    let delete_patch = <Vec<u32> as GetPatchType>::resolve_diff(&target, &shorter_vec);
+    assert_eq!(
+        delete_patch,
+        VecPatch::Incremental(vec![VecOp::Remove { index: 3 }, VecOp::Remove { index: 2 },])
+    );
+
+    <Vec<u32> as GetPatchType>::resolve_apply(&mut target, &delete_patch);
+    assert_eq!(target, vec![1, 4]);
+}
+
+#[test]
+fn test_vec_nested_diffable_diff() {
+    use notifiapp_protocol_core::diff::GetPatchType;
+
+    let sub_id1 = Uuid::new_v4();
+    let sub_id2 = Uuid::new_v4();
+
+    let old_vec = vec![
+        SubConfig {
+            sub_id: sub_id1,
+            name: "Sub1".to_string(),
+        },
+        SubConfig {
+            sub_id: sub_id2,
+            name: "Sub2".to_string(),
+        },
+    ];
+
+    let new_vec = vec![
+        SubConfig {
+            sub_id: sub_id1,
+            name: "Sub1".to_string(),
+        },
+        SubConfig {
+            sub_id: sub_id2,
+            name: "Sub2 Updated".to_string(),
+        }, // changed name
+    ];
+
+    let patch = <Vec<SubConfig> as GetPatchType>::resolve_diff(&old_vec, &new_vec);
+
+    match &patch {
+        VecPatch::Incremental(ops) => {
+            assert_eq!(ops.len(), 1);
+            match &ops[0] {
+                VecOp::Update {
+                    index,
+                    patch: nested_patch,
+                } => {
+                    assert_eq!(*index, 1);
+                    assert_eq!(
+                        nested_patch,
+                        &Some(SubConfigPatch {
+                            sub_id: sub_id2,
+                            name: Some("Sub2 Updated".to_string()),
+                        })
+                    );
+                }
+                _ => panic!("Expected VecOp::Update"),
+            }
+        }
+        _ => panic!("Expected VecPatch::Incremental"),
+    }
+
+    let mut target = old_vec;
+    <Vec<SubConfig> as GetPatchType>::resolve_apply(&mut target, &patch);
+    assert_eq!(target[1].name, "Sub2 Updated");
+}
+
+#[test]
+fn test_vec_deep_nesting_diff() {
+    use notifiapp_protocol_core::diff::GetPatchType;
+
+    let sub_id = Uuid::new_v4();
+    let profile_id = Uuid::new_v4();
+
+    let old_vec = vec![UserProfile {
+        id: profile_id,
+        display_name: "Pavlo".to_string(),
+        created_at: 12345,
+        config: SubConfig {
+            sub_id,
+            name: "Old Config".to_string(),
+        },
+    }];
+
+    let new_vec = vec![UserProfile {
+        id: profile_id,
+        display_name: "Pavlo".to_string(),
+        created_at: 12345,
+        config: SubConfig {
+            sub_id,
+            name: "Deep Updated Config".to_string(), // nested changed
+        },
+    }];
+
+    let patch = <Vec<UserProfile> as GetPatchType>::resolve_diff(&old_vec, &new_vec);
+
+    match &patch {
+        VecPatch::Incremental(ops) => {
+            assert_eq!(ops.len(), 1);
+            match &ops[0] {
+                VecOp::Update {
+                    index,
+                    patch: user_patch,
+                } => {
+                    assert_eq!(*index, 0);
+                    let user_patch = user_patch.as_ref().unwrap();
+                    assert_eq!(user_patch.id, profile_id);
+                    assert_eq!(user_patch.display_name, None);
+                    assert_eq!(
+                        user_patch.config,
+                        Some(SubConfigPatch {
+                            sub_id,
+                            name: Some("Deep Updated Config".to_string()),
+                        })
+                    );
+                }
+                _ => panic!("Expected VecOp::Update"),
+            }
+        }
+        _ => panic!("Expected VecPatch::Incremental"),
+    }
+
+    let mut target = old_vec;
+    <Vec<UserProfile> as GetPatchType>::resolve_apply(&mut target, &patch);
+    assert_eq!(target[0].config.name, "Deep Updated Config");
 }

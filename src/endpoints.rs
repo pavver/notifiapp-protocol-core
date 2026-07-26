@@ -72,10 +72,7 @@ impl EndpointManager {
         url_str: &str,
         priority: EndpointPriority,
     ) -> Result<EndpointHandle, String> {
-        let mut url = Url::parse(url_str).map_err(|e| e.to_string())?;
-        if url.path() == "/" || url.path().is_empty() {
-            url.set_path("/ws");
-        }
+        let url = Url::parse(url_str).map_err(|e| e.to_string())?;
 
         let handle = EndpointHandle::new();
         let data = EndpointData {

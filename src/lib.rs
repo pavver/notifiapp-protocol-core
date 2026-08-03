@@ -12,8 +12,7 @@ pub mod endpoints;
 pub mod envelope;
 pub mod server;
 pub mod subscriptions;
-#[cfg(feature = "webrtc")]
-pub mod webrtc;
+
 
 // Re-exports for convenience
 pub use auth::{AuthSessionEvent, ParsedAuthResponse, SessionAuthHandler};
@@ -27,5 +26,4 @@ pub use envelope::{EventEnvelope, RequestEnvelope, ResponseEnvelope};
 pub use notifiapp_protocol_macros::Diffable;
 pub use server::{ProtocolHandler, ProtocolServer};
 pub use subscriptions::{DiffResult, ReactiveTracker, SubscriptionRegistry};
-#[cfg(feature = "webrtc")]
-pub use webrtc::{ParticipantState, RoomState, SignalPayload, TrackInfo, TrackType, WebRtcSignal};
+

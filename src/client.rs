@@ -23,6 +23,20 @@ pub enum ProtocolError<E> {
 }
 
 /// A trait for actions that have an associated message priority.
+///
+/// # Example
+///
+/// ```ignore
+/// impl Prioritized for MyAction {
+///     fn priority(&self) -> MessagePriority {
+///         match self {
+///             MyAction::AudioFrame { .. } => MessagePriority::RealTime,
+///             MyAction::SyncData { .. } => MessagePriority::Bulk,
+///             _ => MessagePriority::Normal,
+///         }
+///     }
+/// }
+/// ```
 pub trait Prioritized {
     /// Return the priority for this message.
     fn priority(&self) -> MessagePriority;
@@ -30,7 +44,7 @@ pub trait Prioritized {
 
 /// A generic typed protocol client.
 ///
-/// Wraps `notifiapp_transport::WsClient` and handles:
+/// Wraps any `notifiapp_transport::Transport` implementation and handles:
 /// - Encoding request actions into `RequestEnvelope` using codec `C`.
 /// - Sending requests via transport with proper priority scheduling.
 /// - Decoding response bytes into `ResponseEnvelope` and extracting outcomes.

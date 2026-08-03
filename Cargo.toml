@@ -22,7 +22,5 @@ parking_lot = "0.12.5"
 notifiapp-protocol-macros = { path = "macros" }
 
 [features]
-default = ["webrtc"]
-# Enable WebRTC signaling and room models
-webrtc = []
+default = []
 

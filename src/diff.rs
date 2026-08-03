@@ -127,6 +127,13 @@ pub enum VecPatch<T, Patch> {
     Incremental(Vec<VecOp<T, Patch>>),
 }
 
+impl<T, Patch> VecPatch<T, Patch> {
+    /// Returns true if the patch represents actual changes.
+    pub fn is_some(&self) -> bool {
+        !matches!(self, VecPatch::NoChange)
+    }
+}
+
 /// An operation applied to an element inside a Vec collection.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum VecOp<T, Patch> {

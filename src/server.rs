@@ -29,7 +29,7 @@ where
     /// Spawns concurrent tokio tasks for each request to avoid blocking the main session loop.
     pub async fn run_session(
         state: State,
-        mut inbox: tokio::sync::mpsc::UnboundedReceiver<Frame>,
+        mut inbox: tokio::sync::mpsc::Receiver<Frame>,
         handle: ServerSessionHandle,
         handler: Arc<dyn ProtocolHandler<State, Action, Response, Error>>,
         cancel: tokio_util::sync::CancellationToken,

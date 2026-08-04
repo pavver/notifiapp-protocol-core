@@ -132,6 +132,25 @@ pub fn derive_diffable(input: TokenStream) -> TokenStream {
         }
     });
 
+    // 6. Generate merge_patch implementation
+    let merge_fields = fields.iter().map(|f| {
+        let field_name = &f.ident;
+        let field_ty = &f.ty;
+        let field_attrs = parse_field_attrs(f);
+
+        if field_attrs.is_required {
+            quote! {
+                old.#field_name = new.#field_name.clone();
+            }
+        } else if field_attrs.is_immutable {
+            quote! {}
+        } else {
+            quote! {
+                <#field_ty as ::notifiapp_protocol_core::diff::GetPatchType>::resolve_merge(&mut old.#field_name, &new.#field_name);
+            }
+        }
+    });
+
     let expanded = quote! {
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
         pub struct #patch_name {
@@ -166,6 +185,10 @@ pub fn derive_diffable(input: TokenStream) -> TokenStream {
                 #patch_name {
                     #( #full_fields, )*
                 }
+            }
+
+            fn merge_patch(old: &mut Self::Patch, new: &Self::Patch) {
+                #( #merge_fields )*
             }
         }
     };

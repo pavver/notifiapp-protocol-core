@@ -35,7 +35,9 @@ pub mod conflated_queue;
 pub mod diff;
 pub mod endpoints;
 pub mod envelope;
+
 pub mod server;
+pub mod service;
 pub mod subscriptions;
 
 // Re-exports for convenience
@@ -52,4 +54,4 @@ pub use endpoints::{EndpointData, EndpointHandle, EndpointManager, EndpointPrior
 pub use envelope::{EventEnvelope, RequestEnvelope, ResponseEnvelope};
 pub use notifiapp_protocol_macros::Diffable;
 pub use server::{ProtocolHandler, ProtocolServer};
-pub use subscriptions::{DiffResult, ReactiveTracker, SubscriptionRegistry};
+pub use subscriptions::{DiffResult, SubscriptionRegistry};

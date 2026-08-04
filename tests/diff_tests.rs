@@ -294,3 +294,89 @@ fn test_vec_deep_nesting_diff() {
     <Vec<UserProfile> as GetPatchType>::resolve_apply(&mut target, &patch);
     assert_eq!(target[0].config.name, "Deep Updated Config");
 }
+
+#[derive(Debug, Clone, PartialEq)]
+struct DeepNestedEvent {
+    id: Uuid,
+    patch: UserProfilePatch,
+}
+
+impl notifiapp_protocol_core::conflated_queue::Conflatabled for DeepNestedEvent {
+    fn conflation_key(&self) -> Option<notifiapp_protocol_core::conflated_queue::ConflationKey> {
+        Some(
+            notifiapp_protocol_core::conflated_queue::ConflationKey::Entity(
+                "UserProfile".to_string(),
+                self.id,
+            ),
+        )
+    }
+
+    fn merge_with(&self, newer: &Self) -> Option<Self> {
+        let mut merged_patch = self.patch.clone();
+        UserProfile::merge_patch(&mut merged_patch, &newer.patch);
+        Some(DeepNestedEvent {
+            id: self.id,
+            patch: merged_patch,
+        })
+    }
+}
+
+#[test]
+fn test_conflated_queue_nested_objects_merging() {
+    let profile_id = Uuid::new_v4();
+    let sub_id = Uuid::new_v4();
+
+    let mut queue = notifiapp_protocol_core::conflated_queue::ConflatedQueue::new();
+
+    // Patch 1: Changes display_name
+    queue.push(DeepNestedEvent {
+        id: profile_id,
+        patch: UserProfilePatch {
+            id: profile_id,
+            display_name: Some("Name 1".to_string()),
+            created_at: None,
+            config: None,
+        },
+    });
+
+    // Patch 2: Changes nested config name
+    queue.push(DeepNestedEvent {
+        id: profile_id,
+        patch: UserProfilePatch {
+            id: profile_id,
+            display_name: None,
+            created_at: None,
+            config: Some(SubConfigPatch {
+                sub_id,
+                name: Some("Config 1".to_string()),
+            }),
+        },
+    });
+
+    // Patch 3: Overrides nested config name and changes display_name again
+    queue.push(DeepNestedEvent {
+        id: profile_id,
+        patch: UserProfilePatch {
+            id: profile_id,
+            display_name: Some("Name 3".to_string()),
+            created_at: None,
+            config: Some(SubConfigPatch {
+                sub_id,
+                name: Some("Config Final".to_string()),
+            }),
+        },
+    });
+
+    assert_eq!(queue.len(), 1);
+
+    let final_event = queue.pop().expect("Should have one merged event");
+
+    assert_eq!(final_event.patch.display_name, Some("Name 3".to_string()));
+    assert_eq!(
+        final_event.patch.config,
+        Some(SubConfigPatch {
+            sub_id,
+            name: Some("Config Final".to_string()),
+        })
+    );
+}

@@ -1,6 +1,6 @@
 use notifiapp_protocol_core::{
-    DiffResult, JsonCodec, PostcardCodec, ProtocolCodec, ReactiveTracker, RequestEnvelope,
-    ResponseEnvelope, SubscriptionRegistry,
+    JsonCodec, PostcardCodec, ProtocolCodec, RequestEnvelope, ResponseEnvelope,
+    SubscriptionRegistry,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -92,51 +92,6 @@ fn test_subscription_registry() {
     registry.remove(&sub_id);
     let dispatched_again = registry.dispatch(&sub_id, "hello_event".to_string());
     assert!(!dispatched_again);
-}
-
-#[test]
-fn test_reactive_tracker() {
-    let initial_ids = vec![
-        Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap(),
-        Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap(),
-    ];
-    let mut tracker = ReactiveTracker::new(initial_ids.clone());
-
-    #[derive(Clone, Debug, PartialEq)]
-    struct Item {
-        id: Uuid,
-        name: String,
-    }
-
-    let id1 = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
-    let id3 = Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap();
-
-    let new_collection = vec![
-        Item {
-            id: id1,
-            name: "Item 1".to_string(),
-        },
-        Item {
-            id: id3,
-            name: "Item 3".to_string(),
-        },
-    ];
-
-    let diff: DiffResult<Uuid, Item> = tracker.update(new_collection, |item| item.id);
-
-    // Item 2 should be removed, Item 3 should be added, Item 1 remains
-    assert_eq!(
-        diff.removed,
-        vec![Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap()]
-    );
-    assert_eq!(
-        diff.added,
-        vec![Item {
-            id: id3,
-            name: "Item 3".to_string()
-        }]
-    );
-    assert_eq!(tracker.cached_ids(), &vec![id1, id3]);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

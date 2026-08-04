@@ -59,3 +59,41 @@ impl<V> EventEnvelope<V> {
         }
     }
 }
+
+impl<V: crate::conflated_queue::Conflatabled + Clone> crate::conflated_queue::Conflatabled
+    for EventEnvelope<V>
+{
+    fn conflation_key(&self) -> Option<crate::conflated_queue::ConflationKey> {
+        let inner_key = self.event.conflation_key()?;
+        let sub_str = self
+            .subscription_id
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "global".to_string());
+
+        // Convert the inner key into a string and prepend subscription
+        let inner_key_str = match inner_key {
+            crate::conflated_queue::ConflationKey::Unique(_) => return None, // Don't conflate unique keys
+            crate::conflated_queue::ConflationKey::Entity(s, _) => s,
+            crate::conflated_queue::ConflationKey::Custom(s) => s,
+        };
+
+        Some(crate::conflated_queue::ConflationKey::Custom(format!(
+            "{}_{}",
+            sub_str, inner_key_str
+        )))
+    }
+
+    fn merge_with(&self, newer: &Self) -> Option<Self> {
+        if self.subscription_id != newer.subscription_id {
+            return Some(newer.clone());
+        }
+
+        if let Some(merged_event) = self.event.merge_with(&newer.event) {
+            let mut result = newer.clone();
+            result.event = merged_event;
+            Some(result)
+        } else {
+            Some(newer.clone())
+        }
+    }
+}

@@ -27,6 +27,9 @@ pub trait Diffable {
     /// Generate a full patch representing the entire current state of `self`.
     /// Used for initial full syncs.
     fn to_full_patch(&self) -> Self::Patch;
+
+    /// Merge `new` patch into `old` patch.
+    fn merge_patch(old: &mut Self::Patch, new: &Self::Patch);
 }
 
 /// Trait used by the Diffable derive macro to automatically resolve the patch type
@@ -53,6 +56,7 @@ pub trait GetPatchType {
     fn resolve_diff(old: &Self, new: &Self) -> Self::FieldPatch;
     fn resolve_apply(target: &mut Self, patch: &Self::FieldPatch);
     fn resolve_full(val: &Self) -> Self::FieldPatch;
+    fn resolve_merge(old: &mut Self::FieldPatch, new: &Self::FieldPatch);
 }
 
 // Blanket implementation for any type T that implements Diffable (nested structures).
@@ -90,6 +94,16 @@ where
     fn resolve_full(val: &Self) -> Self::FieldPatch {
         Some(val.to_full_patch())
     }
+
+    fn resolve_merge(old: &mut Self::FieldPatch, new: &Self::FieldPatch) {
+        if let Some(new_patch) = new {
+            if let Some(old_patch) = old {
+                T::merge_patch(old_patch, new_patch);
+            } else {
+                *old = Some(new_patch.clone());
+            }
+        }
+    }
 }
 
 // Helper macro to implement GetPatchType for value types (non-diffable leaf nodes).
@@ -126,6 +140,12 @@ macro_rules! impl_value_diff {
 
             fn resolve_full(val: &Self) -> Self::FieldPatch {
                 Some(val.clone())
+            }
+
+            fn resolve_merge(old: &mut Self::FieldPatch, new: &Self::FieldPatch) {
+                if new.is_some() {
+                    *old = new.clone();
+                }
             }
         }
     };
@@ -178,6 +198,12 @@ where
 
     fn resolve_full(val: &Self) -> Self::FieldPatch {
         Some(val.clone())
+    }
+
+    fn resolve_merge(old: &mut Self::FieldPatch, new: &Self::FieldPatch) {
+        if new.is_some() {
+            *old = new.clone();
+        }
     }
 }
 
@@ -365,5 +391,30 @@ where
 
     fn resolve_full(val: &Self) -> Self::FieldPatch {
         VecPatch::Full(val.clone())
+    }
+
+    fn resolve_merge(old: &mut Self::FieldPatch, new: &Self::FieldPatch) {
+        match new {
+            VecPatch::NoChange => {} // Nothing to merge
+            VecPatch::Full(full) => {
+                *old = VecPatch::Full(full.clone());
+            }
+            VecPatch::Incremental(new_ops) => {
+                match old {
+                    VecPatch::NoChange => {
+                        *old = new.clone();
+                    }
+                    VecPatch::Full(old_full) => {
+                        // Apply incremental to the full patch directly
+                        Self::resolve_apply(old_full, new);
+                    }
+                    VecPatch::Incremental(old_ops) => {
+                        // Merge incremental ops
+                        // For simplicity, just append new ops. A true merge would compact them.
+                        old_ops.extend(new_ops.clone());
+                    }
+                }
+            }
+        }
     }
 }

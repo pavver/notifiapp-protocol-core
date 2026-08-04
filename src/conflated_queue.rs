@@ -104,3 +104,63 @@ impl<M: Conflatabled> Default for ConflatedQueue<M> {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, Clone, PartialEq)]
+    struct TestMsg {
+        id: Uuid,
+        val: i32,
+    }
+
+    impl Conflatabled for TestMsg {
+        fn conflation_key(&self) -> Option<ConflationKey> {
+            Some(ConflationKey::Entity("test".to_string(), self.id))
+        }
+
+        fn merge_with(&self, newer: &Self) -> Option<Self> {
+            Some(TestMsg {
+                id: self.id,
+                val: self.val + newer.val,
+            })
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    struct UniqueMsg(Uuid);
+
+    impl Conflatabled for UniqueMsg {
+        fn conflation_key(&self) -> Option<ConflationKey> {
+            None
+        }
+    }
+
+    #[test]
+    fn test_queue_push_pop() {
+        let mut q = ConflatedQueue::new();
+        let id1 = Uuid::new_v4();
+
+        q.push(TestMsg { id: id1, val: 1 });
+        q.push(TestMsg { id: id1, val: 2 });
+
+        assert_eq!(q.len(), 1);
+        assert_eq!(q.pop(), Some(TestMsg { id: id1, val: 3 }));
+        assert_eq!(q.pop(), None);
+    }
+
+    #[test]
+    fn test_queue_unique() {
+        let mut q = ConflatedQueue::new();
+        let id1 = Uuid::new_v4();
+
+        q.push(UniqueMsg(id1));
+        q.push(UniqueMsg(id1));
+
+        assert_eq!(q.len(), 2);
+        assert_eq!(q.pop(), Some(UniqueMsg(id1)));
+        assert_eq!(q.pop(), Some(UniqueMsg(id1)));
+        assert_eq!(q.pop(), None);
+    }
+}

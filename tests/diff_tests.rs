@@ -3,14 +3,14 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Diffable, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SubConfig {
-    #[diff(required)]
+    #[diff(key)]
     pub sub_id: Uuid,
     pub name: String,
 }
 
 #[derive(Debug, Clone, Diffable, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UserProfile {
-    #[diff(required)]
+    #[diff(key)]
     pub id: Uuid,
 
     pub display_name: String,
@@ -153,10 +153,10 @@ fn test_vec_scalar_diff() {
         patch,
         VecPatch::Incremental(vec![
             VecOp::Update {
-                index: 1,
+                key: 1,
                 patch: Some(4)
             },
-            VecOp::Insert { index: 3, value: 5 },
+            VecOp::Insert { key: 3, value: 5 },
         ])
     );
 
@@ -169,7 +169,7 @@ fn test_vec_scalar_diff() {
     let delete_patch = <Vec<u32> as GetPatchType>::resolve_diff(&target, &shorter_vec);
     assert_eq!(
         delete_patch,
-        VecPatch::Incremental(vec![VecOp::Remove { index: 3 }, VecOp::Remove { index: 2 },])
+        VecPatch::Incremental(vec![VecOp::Remove { key: 3 }, VecOp::Remove { key: 2 },])
     );
 
     <Vec<u32> as GetPatchType>::resolve_apply(&mut target, &delete_patch);
@@ -212,10 +212,10 @@ fn test_vec_nested_diffable_diff() {
             assert_eq!(ops.len(), 1);
             match &ops[0] {
                 VecOp::Update {
-                    index,
+                    key,
                     patch: nested_patch,
                 } => {
-                    assert_eq!(*index, 1);
+                    assert_eq!(*key, sub_id2);
                     assert_eq!(
                         nested_patch,
                         &Some(SubConfigPatch {
@@ -269,10 +269,10 @@ fn test_vec_deep_nesting_diff() {
             assert_eq!(ops.len(), 1);
             match &ops[0] {
                 VecOp::Update {
-                    index,
+                    key,
                     patch: user_patch,
                 } => {
-                    assert_eq!(*index, 0);
+                    assert_eq!(*key, profile_id);
                     let user_patch = user_patch.as_ref().unwrap();
                     assert_eq!(user_patch.id, profile_id);
                     assert_eq!(user_patch.display_name, None);

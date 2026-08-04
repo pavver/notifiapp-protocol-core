@@ -1,11 +1,21 @@
 /// Trait for structures that support calculating incremental diffs (patches).
 pub trait Diffable {
+    /// The key type used to identify elements uniquely (e.g. Uuid).
+    type Key: PartialEq
+        + Clone
+        + std::fmt::Debug
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>;
+
     /// The patch structure that represents the changes.
     type Patch: serde::Serialize
         + for<'de> serde::Deserialize<'de>
         + std::fmt::Debug
         + Clone
         + PartialEq;
+
+    /// Returns the key for this item.
+    fn get_key(&self) -> Self::Key;
 
     /// Calculate the difference between `self` (old) and `new`.
     /// Returns `Some(Patch)` if there are differences, or `None` if the objects are identical.
@@ -22,12 +32,24 @@ pub trait Diffable {
 /// Trait used by the Diffable derive macro to automatically resolve the patch type
 /// and diff/apply operations for fields.
 pub trait GetPatchType {
+    type Key: PartialEq
+        + Clone
+        + std::fmt::Debug
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>;
+
     type FieldPatch: serde::Serialize
         + for<'de> serde::Deserialize<'de>
         + std::fmt::Debug
         + Clone
         + PartialEq;
 
+    /// Whether this type supports ID-based list diffing.
+    const IS_ID_BASED: bool;
+
+    fn resolve_key(&self) -> Self::Key;
+    fn index_to_key(index: usize) -> Self::Key;
+    fn key_to_index(key: &Self::Key) -> usize;
     fn resolve_diff(old: &Self, new: &Self) -> Self::FieldPatch;
     fn resolve_apply(target: &mut Self, patch: &Self::FieldPatch);
     fn resolve_full(val: &Self) -> Self::FieldPatch;
@@ -38,7 +60,22 @@ impl<T> GetPatchType for T
 where
     T: Diffable,
 {
+    type Key = T::Key;
     type FieldPatch = Option<T::Patch>;
+
+    const IS_ID_BASED: bool = true;
+
+    fn resolve_key(&self) -> Self::Key {
+        self.get_key()
+    }
+
+    fn index_to_key(_index: usize) -> Self::Key {
+        panic!("Cannot convert index to key for ID-based collections")
+    }
+
+    fn key_to_index(_key: &Self::Key) -> usize {
+        panic!("Cannot convert key to index for ID-based collections")
+    }
 
     fn resolve_diff(old: &Self, new: &Self) -> Self::FieldPatch {
         old.diff(new)
@@ -60,7 +97,22 @@ where
 macro_rules! impl_value_diff {
     ($ty:ty) => {
         impl $crate::diff::GetPatchType for $ty {
+            type Key = usize;
             type FieldPatch = Option<$ty>;
+
+            const IS_ID_BASED: bool = false;
+
+            fn resolve_key(&self) -> Self::Key {
+                0
+            }
+
+            fn index_to_key(index: usize) -> Self::Key {
+                index
+            }
+
+            fn key_to_index(key: &Self::Key) -> usize {
+                *key
+            }
 
             fn resolve_diff(old: &Self, new: &Self) -> Self::FieldPatch {
                 if old != new { Some(new.clone()) } else { None }
@@ -99,7 +151,20 @@ impl<T> GetPatchType for Option<T>
 where
     T: PartialEq + Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + std::fmt::Debug,
 {
+    type Key = usize;
     type FieldPatch = Option<Option<T>>;
+
+    const IS_ID_BASED: bool = false;
+
+    fn resolve_key(&self) -> Self::Key {
+        0
+    }
+    fn index_to_key(index: usize) -> Self::Key {
+        index
+    }
+    fn key_to_index(key: &Self::Key) -> usize {
+        *key
+    }
 
     fn resolve_diff(old: &Self, new: &Self) -> Self::FieldPatch {
         if old != new { Some(new.clone()) } else { None }
@@ -118,16 +183,16 @@ where
 
 /// A patch representing changes in a Vec collection.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
-pub enum VecPatch<T, Patch> {
+pub enum VecPatch<K, T, Patch> {
     /// No changes detected.
     NoChange,
     /// Full reset: replace entire list.
     Full(Vec<T>),
     /// Incremental updates: a sequence of insert, remove, or update operations.
-    Incremental(Vec<VecOp<T, Patch>>),
+    Incremental(Vec<VecOp<K, T, Patch>>),
 }
 
-impl<T, Patch> VecPatch<T, Patch> {
+impl<K, T, Patch> VecPatch<K, T, Patch> {
     /// Returns true if the patch represents actual changes.
     pub fn is_some(&self) -> bool {
         !matches!(self, VecPatch::NoChange)
@@ -136,13 +201,13 @@ impl<T, Patch> VecPatch<T, Patch> {
 
 /// An operation applied to an element inside a Vec collection.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
-pub enum VecOp<T, Patch> {
-    /// Insert a new item at index.
-    Insert { index: usize, value: T },
-    /// Remove an item at index.
-    Remove { index: usize },
-    /// Update an item at index with a patch (diff).
-    Update { index: usize, patch: Patch },
+pub enum VecOp<K, T, Patch> {
+    /// Insert a new item.
+    Insert { key: K, value: T },
+    /// Remove an item.
+    Remove { key: K },
+    /// Update an item with a patch (diff).
+    Update { key: K, patch: Patch },
 }
 
 impl<T> GetPatchType for Vec<T>
@@ -154,7 +219,20 @@ where
         + for<'de> serde::Deserialize<'de>
         + std::fmt::Debug,
 {
-    type FieldPatch = VecPatch<T, T::FieldPatch>;
+    type Key = usize;
+    type FieldPatch = VecPatch<T::Key, T, T::FieldPatch>;
+
+    const IS_ID_BASED: bool = false;
+
+    fn resolve_key(&self) -> Self::Key {
+        0
+    }
+    fn index_to_key(index: usize) -> Self::Key {
+        index
+    }
+    fn key_to_index(key: &Self::Key) -> usize {
+        *key
+    }
 
     #[allow(clippy::needless_range_loop)]
     fn resolve_diff(old: &Self, new: &Self) -> Self::FieldPatch {
@@ -163,26 +241,61 @@ where
         }
 
         let mut ops = Vec::new();
-        let common_len = std::cmp::min(old.len(), new.len());
 
-        for i in 0..common_len {
-            if old[i] != new[i] {
-                let patch = T::resolve_diff(&old[i], &new[i]);
-                ops.push(VecOp::Update { index: i, patch });
+        if T::IS_ID_BASED {
+            // ID-based diff algorithm
+            for new_item in new.iter() {
+                let new_key = new_item.resolve_key();
+                if let Some(old_item) = old.iter().find(|o| o.resolve_key() == new_key) {
+                    if old_item != new_item {
+                        let patch = T::resolve_diff(old_item, new_item);
+                        ops.push(VecOp::Update {
+                            key: new_key,
+                            patch,
+                        });
+                    }
+                } else {
+                    ops.push(VecOp::Insert {
+                        key: new_key,
+                        value: new_item.clone(),
+                    });
+                }
             }
-        }
 
-        if new.len() > old.len() {
-            for i in common_len..new.len() {
-                ops.push(VecOp::Insert {
-                    index: i,
-                    value: new[i].clone(),
-                });
+            for old_item in old.iter() {
+                let old_key = old_item.resolve_key();
+                if !new.iter().any(|n| n.resolve_key() == old_key) {
+                    ops.push(VecOp::Remove { key: old_key });
+                }
             }
-        } else if old.len() > new.len() {
-            // Remove starting from the end to avoid shifting indices during execution
-            for i in (common_len..old.len()).rev() {
-                ops.push(VecOp::Remove { index: i });
+        } else {
+            // Index-based fallback algorithm
+            let common_len = std::cmp::min(old.len(), new.len());
+
+            for i in 0..common_len {
+                if old[i] != new[i] {
+                    let patch = T::resolve_diff(&old[i], &new[i]);
+                    ops.push(VecOp::Update {
+                        key: T::index_to_key(i),
+                        patch,
+                    });
+                }
+            }
+
+            if new.len() > old.len() {
+                for i in common_len..new.len() {
+                    ops.push(VecOp::Insert {
+                        key: T::index_to_key(i),
+                        value: new[i].clone(),
+                    });
+                }
+            } else if old.len() > new.len() {
+                // Remove starting from the end to avoid shifting indices during execution
+                for i in (common_len..old.len()).rev() {
+                    ops.push(VecOp::Remove {
+                        key: T::index_to_key(i),
+                    });
+                }
             }
         }
 
@@ -198,21 +311,50 @@ where
             VecPatch::Incremental(ops) => {
                 for op in ops {
                     match op {
-                        VecOp::Insert { index, value } => {
-                            if *index <= target.len() {
-                                target.insert(*index, value.clone());
+                        VecOp::Insert { key, value } => {
+                            if T::IS_ID_BASED {
+                                if let Some(idx) =
+                                    target.iter().position(|o| o.resolve_key() == *key)
+                                {
+                                    target[idx] = value.clone();
+                                } else {
+                                    target.push(value.clone());
+                                }
                             } else {
-                                target.push(value.clone());
+                                let idx = T::key_to_index(key);
+                                if idx <= target.len() {
+                                    target.insert(idx, value.clone());
+                                } else {
+                                    target.push(value.clone());
+                                }
                             }
                         }
-                        VecOp::Remove { index } => {
-                            if *index < target.len() {
-                                target.remove(*index);
+                        VecOp::Remove { key } => {
+                            if T::IS_ID_BASED {
+                                if let Some(idx) =
+                                    target.iter().position(|o| o.resolve_key() == *key)
+                                {
+                                    target.remove(idx);
+                                }
+                            } else {
+                                let idx = T::key_to_index(key);
+                                if idx < target.len() {
+                                    target.remove(idx);
+                                }
                             }
                         }
-                        VecOp::Update { index, patch } => {
-                            if *index < target.len() {
-                                T::resolve_apply(&mut target[*index], patch);
+                        VecOp::Update { key, patch } => {
+                            if T::IS_ID_BASED {
+                                if let Some(idx) =
+                                    target.iter().position(|o| o.resolve_key() == *key)
+                                {
+                                    T::resolve_apply(&mut target[idx], patch);
+                                }
+                            } else {
+                                let idx = T::key_to_index(key);
+                                if idx < target.len() {
+                                    T::resolve_apply(&mut target[idx], patch);
+                                }
                             }
                         }
                     }

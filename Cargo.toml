@@ -22,5 +22,6 @@ parking_lot = "0.12.5"
 notifiapp-protocol-macros = { path = "macros" }
 
 [features]
+build-utils = []
 default = []
 

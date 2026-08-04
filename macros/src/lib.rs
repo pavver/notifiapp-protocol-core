@@ -2,7 +2,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Data, DeriveInput, Field, Fields};
+use syn::{Data, DeriveInput, Field, Fields, parse_macro_input};
 
 /// Derive macro for the Diffable trait.
 /// Generates an incremental patch structure and implements Diffable.
@@ -19,6 +19,18 @@ pub fn derive_diffable(input: TokenStream) -> TokenStream {
         },
         _ => panic!("Diffable derive only supports structs"),
     };
+
+    let mut key_type = quote! { () };
+    let mut get_key_expr = quote! { () };
+    for f in fields.iter() {
+        if parse_field_attrs(f).is_required {
+            let ty = &f.ty;
+            let ident = &f.ident;
+            key_type = quote! { #ty };
+            get_key_expr = quote! { self.#ident.clone() };
+            break;
+        }
+    }
 
     // 1. Generate patch struct fields definition
     let patch_fields_def = fields.iter().map(|f| {
@@ -60,16 +72,19 @@ pub fn derive_diffable(input: TokenStream) -> TokenStream {
     });
 
     // 3. Generate has_changes check: a diff patch is Some only if at least one non-required, non-immutable field changed.
-    let has_changes_checks = fields.iter().filter_map(|f| {
-        let field_name = &f.ident;
-        let field_attrs = parse_field_attrs(f);
+    let has_changes_checks = fields
+        .iter()
+        .filter_map(|f| {
+            let field_name = &f.ident;
+            let field_attrs = parse_field_attrs(f);
 
-        if !field_attrs.is_required && !field_attrs.is_immutable {
-            Some(quote! { patch.#field_name.is_some() })
-        } else {
-            None
-        }
-    }).collect::<Vec<_>>();
+            if !field_attrs.is_required && !field_attrs.is_immutable {
+                Some(quote! { patch.#field_name.is_some() })
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
 
     let has_changes_expr = if has_changes_checks.is_empty() {
         quote! { false }
@@ -125,6 +140,11 @@ pub fn derive_diffable(input: TokenStream) -> TokenStream {
 
         impl ::notifiapp_protocol_core::diff::Diffable for #name {
             type Patch = #patch_name;
+            type Key = #key_type;
+
+            fn get_key(&self) -> Self::Key {
+                #get_key_expr
+            }
 
             fn diff(&self, new: &Self) -> Option<Self::Patch> {
                 let patch = #patch_name {
@@ -166,7 +186,7 @@ fn parse_field_attrs(field: &Field) -> FieldAttrs {
         if attr.path().is_ident("diff") {
             // In syn 2.0, parse nested meta using parse_nested_meta helper
             let _ = attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("required") {
+                if meta.path.is_ident("key") {
                     is_required = true;
                 } else if meta.path.is_ident("immutable") {
                     is_immutable = true;

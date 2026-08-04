@@ -51,15 +51,17 @@ where
                         let handle_clone = handle.clone();
                         let handler_clone = Arc::clone(&handler);
 
-                        let permit = match semaphore.clone().acquire_owned().await {
-                            Ok(permit) => permit,
-                            Err(_) => {
-                                tracing::error!("Semaphore closed unexpectedly");
-                                break;
-                            }
-                        };
+                        let sem_clone = semaphore.clone();
 
                         tasks.spawn(async move {
+                            let permit = match sem_clone.acquire_owned().await {
+                                Ok(permit) => permit,
+                                Err(_) => {
+                                    tracing::error!("Semaphore closed unexpectedly");
+                                    return;
+                                }
+                            };
+
                             if let Err(e) =
                                 Self::process_frame(state_clone, frame, handle_clone, handler_clone).await
                             {

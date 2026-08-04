@@ -11,6 +11,10 @@ pub struct RequestEnvelope<A> {
 }
 
 impl<A> RequestEnvelope<A> {
+    pub fn new(id: u32, action: A) -> Self {
+        Self { id, action }
+    }
+
     /// Create a response envelope corresponding to this request.
     pub fn reply<R, E>(self, payload: Result<R, E>) -> ResponseEnvelope<R, E> {
         ResponseEnvelope {

@@ -199,4 +199,3 @@ fn test_conflated_queue_merging() {
     assert_eq!(final_patch.field_a, Some("new_value_a".to_string()));
     assert_eq!(final_patch.field_b, Some("value_b".to_string()));
 }
-

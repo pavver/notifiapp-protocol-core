@@ -161,7 +161,7 @@ where
                 let _ = self.event_tx.send(AuthSessionEvent::SessionRestoreFailed);
 
                 // Check if we can fallback to credentials immediately
-                if self.credentials.read().await.is_some() {
+                if attempted_resume && self.credentials.read().await.is_some() {
                     // Try to re-authenticate with credentials during the next reconnection round
                     AuthOutcome::Failed
                 } else {

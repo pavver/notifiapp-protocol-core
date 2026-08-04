@@ -13,7 +13,6 @@ pub mod envelope;
 pub mod server;
 pub mod subscriptions;
 
-
 // Re-exports for convenience
 pub use auth::{AuthSessionEvent, ParsedAuthResponse, SessionAuthHandler};
 pub use client::ProtocolClient;
@@ -26,4 +25,3 @@ pub use envelope::{EventEnvelope, RequestEnvelope, ResponseEnvelope};
 pub use notifiapp_protocol_macros::Diffable;
 pub use server::{ProtocolHandler, ProtocolServer};
 pub use subscriptions::{DiffResult, ReactiveTracker, SubscriptionRegistry};
-

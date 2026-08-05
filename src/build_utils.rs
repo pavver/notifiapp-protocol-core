@@ -8,7 +8,7 @@ pub fn configure_protocol_build() {
     // Get protocol name from git root directory name
     let toplevel_output = Command::new("git")
         .current_dir(&manifest_dir)
-        .args(&["rev-parse", "--show-toplevel"])
+        .args(["rev-parse", "--show-toplevel"])
         .output()
         .expect("Failed to execute git rev-parse");
 
@@ -29,7 +29,7 @@ pub fn configure_protocol_build() {
     // Format: {hash}_12.02.2022T12-22-32
     let show_output = Command::new("git")
         .current_dir(&manifest_dir)
-        .args(&[
+        .args([
             "show",
             "-s",
             "--format=%h_%cd",
@@ -60,9 +60,9 @@ pub fn configure_protocol_build() {
 
 pub fn validate_protocol_string(s: &str) {
     for b in s.bytes() {
-        let valid = (b >= b'a' && b <= b'z')
-            || (b >= b'A' && b <= b'Z')
-            || (b >= b'0' && b <= b'9')
+        let valid = b.is_ascii_lowercase()
+            || b.is_ascii_uppercase()
+            || b.is_ascii_digit()
             || b == b'.'
             || b == b'-'
             || b == b'_';

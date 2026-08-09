@@ -2,7 +2,6 @@
 //!
 //! Generic, reusable protocol abstractions for notifiapp client-server communication.
 
-pub mod auth;
 pub mod client;
 
 #[cfg(feature = "build-utils")]
@@ -31,13 +30,16 @@ pub const fn validate_protocol_string(s: &str) -> &str {
 }
 pub mod codec;
 pub mod common;
-pub mod conflated_queue;
 pub mod diff;
-pub mod endpoints;
 pub mod envelope;
+pub mod auth;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod server;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod service;
+pub mod conflated_queue;
+pub mod endpoints;
 pub mod subscriptions;
 
 // Re-exports for convenience
@@ -53,5 +55,6 @@ pub use diff::{Diffable, GetPatchType};
 pub use endpoints::{EndpointData, EndpointHandle, EndpointManager, EndpointPriority};
 pub use envelope::{EventEnvelope, RequestEnvelope, ResponseEnvelope};
 pub use notifiapp_protocol_macros::Diffable;
+#[cfg(not(target_arch = "wasm32"))]
 pub use server::{ProtocolHandler, ProtocolServer};
 pub use subscriptions::{DiffResult, SubscriptionRegistry};

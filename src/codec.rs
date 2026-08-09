@@ -24,7 +24,7 @@ pub struct PostcardCodec;
 
 impl ProtocolCodec for PostcardCodec {
     fn serialize<T: serde::Serialize>(val: &T) -> Result<Vec<u8>, CodecError> {
-        postcard::to_stdvec(val).map_err(|e| CodecError::Serialization(e.to_string()))
+        postcard::to_allocvec(val).map_err(|e| CodecError::Serialization(e.to_string()))
     }
 
     fn deserialize<'a, T: serde::Deserialize<'a>>(bytes: &'a [u8]) -> Result<T, CodecError> {

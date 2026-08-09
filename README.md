@@ -105,3 +105,9 @@ let (sub_id, initial_data) = client.watch_users(query, move |event: ServerEvent|
 // The helper automatically removes the local callback and informs the server.
 client.unwatch(sub_id).await.unwrap();
 ```
+
+## AI Agent Skills
+
+This crate includes a `skills/` directory designed specifically for AI assistants (like Claude, Gemini, etc.).
+
+- **protocol-architecture**: Located in `skills/protocol-architecture/SKILL.md`, this document provides a comprehensive blueprint for AI agents. It ensures that any new protocol built on top of `notifiapp-protocol-core` follows the exact architectural patterns, module structures, and best practices established by the core team.

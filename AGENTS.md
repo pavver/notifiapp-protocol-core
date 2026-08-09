@@ -50,7 +50,14 @@ Every sentence in this document is on a separate line.
 
 - The project integrates macro-based incremental updates.
 - Objects derive `Diffable` to automatically calculate field-level changes.
-- Uses `#[diff(required)]` for fields like IDs that must always be sent in updates.
+- Uses `#[diff(key)]` for fields like IDs that must always be sent in updates.
 - Uses `#[diff(immutable)]` for fields like creation time that never change.
 - Inlined nested Diffable structures are automatically resolved at compile time without extra attributes.
 - Non-annotated fields fall back to full value replacement if changed.
+
+## 9. AI Agent Skills
+
+- The `skills/` directory contains specialized instructions for AI agents.
+- The `protocol-architecture` skill (`skills/protocol-architecture/SKILL.md`) acts as a blueprint for AI agents.
+- It provides step-by-step guidance, code structures, and best practices for creating a scalable client-server protocol crate using `notifiapp-protocol-core`.
+- Agents must refer to this skill before generating boilerplate or architectural code for new protocols.

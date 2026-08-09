@@ -60,6 +60,7 @@ impl<V> EventEnvelope<V> {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl<V: crate::conflated_queue::Conflatabled + Clone> crate::conflated_queue::Conflatabled
     for EventEnvelope<V>
 {

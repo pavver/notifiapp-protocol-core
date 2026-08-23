@@ -28,18 +28,19 @@ pub const fn validate_protocol_string(s: &str) -> &str {
     }
     s
 }
+pub mod auth;
 pub mod codec;
 pub mod common;
 pub mod diff;
 pub mod envelope;
-pub mod auth;
 
+pub mod conflated_queue;
+pub mod endpoints;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod service;
-pub mod conflated_queue;
-pub mod endpoints;
+pub mod session;
 pub mod subscriptions;
 
 // Re-exports for convenience
@@ -57,4 +58,5 @@ pub use envelope::{EventEnvelope, RequestEnvelope, ResponseEnvelope};
 pub use notifiapp_protocol_macros::Diffable;
 #[cfg(not(target_arch = "wasm32"))]
 pub use server::{ProtocolHandler, ProtocolServer};
+pub use session::{Session, SessionConfig, SessionError, SessionManager, SessionStore};
 pub use subscriptions::{DiffResult, SubscriptionRegistry};

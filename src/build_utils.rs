@@ -25,26 +25,24 @@ pub fn configure_protocol_build() {
         .unwrap()
         .to_string();
 
-    // Get version from git hash and date
-    // Format: {hash}_12.02.2022T12-22-32
-    let show_output = Command::new("git")
+    // Get version from git commit hash of the protocol repository
+    let show_output = match Command::new("git")
         .current_dir(&manifest_dir)
-        .args([
-            "show",
-            "-s",
-            "--format=%h_%cd",
-            "--date=format-local:%d.%m.%YT%H-%M-%S",
-            "HEAD",
-        ])
+        .args(["show", "-s", "--format=%h", "HEAD"])
         .output()
-        .expect("Failed to execute git show");
+    {
+        Ok(out) => out,
+        Err(e) => panic!("Failed to execute git show: {}", e),
+    };
 
     if !show_output.status.success() {
         panic!("git show failed");
     }
 
-    let version = String::from_utf8(show_output.stdout).unwrap();
-    let version = version.trim().to_string();
+    let version = match String::from_utf8(show_output.stdout) {
+        Ok(s) => s.trim().to_string(),
+        Err(e) => panic!("Invalid UTF-8 in git output: {}", e),
+    };
 
     // Validate characters
     validate_protocol_string(&repo_name);
